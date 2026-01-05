@@ -1,0 +1,37 @@
+# Logrotate configuration for image server
+# IMPORTANT: Update paths and username below before installing!
+# Replace "yourusername" with your actual username
+
+/home/yourusername/image-server.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0600 yourusername yourusername
+    copytruncate
+}
+
+/home/yourusername/image-server-cron.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0600 yourusername yourusername
+    copytruncate
+}
+
+/tmp/udev_sd_card.log {
+    daily
+    rotate 3
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0600 root root
+    copytruncate
+}
+

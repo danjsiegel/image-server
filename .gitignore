@@ -1,0 +1,65 @@
+# Database credentials
+.db_credentials
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+image-server.log
+image-server-cron.log
+udev_sd_card.log
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+*.old
+
+# Immich
+immich-app/
+*.zip
+
+# Test images (keep one example)
+# DSCF*.JPG
+# But allow DSCF1949.JPG as test file
+
+# Docker
+docker-compose.override.yml
+
+# Local config overrides
+.env.local
+config.local.*
+
+# User-specific paths (udev rules need to be customized per user)
+# Note: udev_sd_card.rules contains placeholder "yourusername" - update before use
+

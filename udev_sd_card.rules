@@ -1,0 +1,14 @@
+# Udev rules for SD card auto-mount and processing
+# Place this file in /etc/udev/rules.d/99-sd-card-image-server.rules
+#
+# IMPORTANT: Update the path below to match your username!
+# Replace "yourusername" with your actual username
+
+# Detect SD card insertion (mmcblk devices - built-in SD card readers)
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="mmcblk[0-9]*p[0-9]*", RUN+="/bin/bash /home/yourusername/image-server/udev_sd_card_wrapper.sh %k"
+
+# For USB card readers (sd[b-z] devices) - check partition, not disk
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd[b-z][0-9]*", ENV{ID_FS_TYPE}=="vfat", RUN+="/bin/bash /home/yourusername/image-server/udev_sd_card_wrapper.sh %k"
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd[b-z][0-9]*", ENV{ID_FS_TYPE}=="exfat", RUN+="/bin/bash /home/yourusername/image-server/udev_sd_card_wrapper.sh %k"
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd[b-z][0-9]*", ENV{ID_FS_TYPE}=="ntfs", RUN+="/bin/bash /home/yourusername/image-server/udev_sd_card_wrapper.sh %k"
+
