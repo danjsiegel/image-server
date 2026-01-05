@@ -5,7 +5,9 @@ set -e
 
 # Configuration
 SOURCE_MOUNT="/media/$USER"
-DEST_BASE="/home/$USER/images"
+INTERNAL_IMAGES="/home/$USER/images"
+EXTERNAL_IMAGES="/mnt/external-storage/images"
+MIN_FREE_SPACE_GB=10
 LOG_FILE="/home/$USER/image-server.log"
 LOCK_FILE="/tmp/sd_card_copy.lock"
 
@@ -61,6 +63,34 @@ if [ -z "$SD_MOUNT" ] || [ ! -d "$SD_MOUNT" ]; then
 fi
 
 log "SD card detected at: $SD_MOUNT"
+
+# Check available space on internal drive and choose destination
+if [ -d "$INTERNAL_IMAGES" ]; then
+    # Get available space in GB (df -BG outputs in GB, extract number)
+    AVAILABLE_SPACE=$(df -BG "$INTERNAL_IMAGES" 2>/dev/null | tail -1 | awk '{print $4}' | sed 's/G//' || echo "0")
+    
+    # Handle case where df might return non-numeric (e.g., if filesystem doesn't exist)
+    if ! [[ "$AVAILABLE_SPACE" =~ ^[0-9]+$ ]]; then
+        AVAILABLE_SPACE=0
+    fi
+    
+    if [ "$AVAILABLE_SPACE" -lt "$MIN_FREE_SPACE_GB" ]; then
+        log "Internal drive low on space (${AVAILABLE_SPACE}GB free < ${MIN_FREE_SPACE_GB}GB), using external drive"
+        DEST_BASE="$EXTERNAL_IMAGES"
+        # Create external directory if it doesn't exist
+        sudo mkdir -p "$EXTERNAL_IMAGES" 2>/dev/null || true
+        sudo chown $USER:$USER "$EXTERNAL_IMAGES" 2>/dev/null || true
+    else
+        log "Using internal drive (${AVAILABLE_SPACE}GB free)"
+        DEST_BASE="$INTERNAL_IMAGES"
+    fi
+else
+    # Internal images directory doesn't exist, use it anyway (will be created)
+    log "Using internal drive (directory will be created)"
+    DEST_BASE="$INTERNAL_IMAGES"
+fi
+
+log "Destination: $DEST_BASE"
 
 # Run the copy script
 SCRIPT_DIR="/home/$USER/image-server"

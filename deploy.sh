@@ -29,6 +29,8 @@ scp config.sh "$REMOTE_HOST:$REMOTE_DIR/"
 scp test_metadata.py "$REMOTE_HOST:$REMOTE_DIR/"
 scp process_new_images.py "$REMOTE_HOST:$REMOTE_DIR/"
 scp image-server-logrotate "$REMOTE_HOST:$REMOTE_DIR/"
+scp setup_external_drive.sh "$REMOTE_HOST:$REMOTE_DIR/"
+scp test_storage_failover.sh "$REMOTE_HOST:$REMOTE_DIR/"
 
 # Make scripts executable
 ssh "$REMOTE_HOST" "chmod +x $REMOTE_DIR/*.sh $REMOTE_DIR/*.py 2>/dev/null || true"

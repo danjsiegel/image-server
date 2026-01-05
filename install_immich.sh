@@ -68,8 +68,20 @@ HOST_IP=$(hostname -I | awk '{print $1}')
 # Update .env file
 echo "Configuring .env file..."
 
-# Set upload location to images directory
-sed -i "s|UPLOAD_LOCATION=.*|UPLOAD_LOCATION=/home/$USER/images|" .env
+# Set upload location to separate directory (NOT in ~/images mount)
+# Immich will store thumbnails, encoded videos, profiles here - separate from source images
+sed -i "s|UPLOAD_LOCATION=.*|UPLOAD_LOCATION=/home/$USER/immich-library|" .env
+
+# Create immich library directory and required subdirectories
+mkdir -p "$HOME/immich-library/{library,thumbs,upload,backups,profile,encoded-video}"
+# Create .immich marker files that Immich expects
+touch "$HOME/immich-library/library/.immich"
+touch "$HOME/immich-library/thumbs/.immich"
+touch "$HOME/immich-library/upload/.immich"
+touch "$HOME/immich-library/backups/.immich"
+touch "$HOME/immich-library/profile/.immich"
+touch "$HOME/immich-library/encoded-video/.immich"
+echo "✓ Created Immich library directory structure: $HOME/immich-library"
 
 # Configure to use external PostgreSQL
 sed -i "s|DB_USERNAME=.*|DB_USERNAME=image_server|" .env
@@ -113,14 +125,41 @@ if 'immich-server' in data.get('services', {}):
         if isinstance(deps, list) and 'database' in deps:
             deps.remove('database')
 
-# Add mount for existing images directory
+# Configure volume mounts for immich-server
 # Uses home directory from environment
 if 'immich-server' in data.get('services', {}):
     volumes = data['services']['immich-server'].get('volumes', [])
+    
+    # Add read-only mount for external library (existing images)
     if not any('/mnt/images' in v for v in volumes):
         images_path = os.path.expanduser('~/images')
         volumes.append(f'{images_path}:/mnt/images:ro')
-        data['services']['immich-server']['volumes'] = volumes
+    
+    # Update Immich's library/upload volume to point to separate directory (NOT in ~/images)
+    # This prevents Immich from writing thumbnails/encoded videos into the main images directory
+    immich_library_path = os.path.expanduser('~/immich-library')
+    # Find and replace any existing upload volume mounts
+    # Immich needs the entire upload directory mounted, not just library subdirectory
+    new_volumes = []
+    upload_mount_found = False
+    for vol in volumes:
+        vol_str = str(vol)
+        # Check if this is an upload mount (container path contains /usr/src/app/upload)
+        if ':/usr/src/app/upload' in vol_str:
+            # Replace with entire immich library directory mount
+            new_volumes.append(f'{immich_library_path}:/usr/src/app/upload')
+            upload_mount_found = True
+        else:
+            # Keep other volumes (including /mnt/images read-only mount)
+            new_volumes.append(vol)
+    
+    # If no upload mount was found, add it
+    if not upload_mount_found:
+        new_volumes.append(f'{immich_library_path}:/usr/src/app/upload')
+    
+    volumes = new_volumes
+    
+    data['services']['immich-server']['volumes'] = volumes
     
     # Remove port 2283 exposure for security (only accessible via nginx)
     if 'ports' in data['services']['immich-server']:
@@ -453,8 +492,8 @@ echo "=== Installation Complete ==="
 echo ""
 echo "Immich is configured to:"
 echo "  - Use existing PostgreSQL database: immich"
-echo "  - Store images in: /home/$USER/images"
-echo "  - Access existing images via: /mnt/images (read-only)"
+echo "  - Immich library (thumbnails, encoded videos, etc.): /home/$USER/immich-library"
+echo "  - Access existing source images via: /mnt/images (read-only, points to ~/images)"
 echo ""
 echo "Next steps:"
 echo "1. Log out and back in (or run: newgrp docker) for docker group to take effect"

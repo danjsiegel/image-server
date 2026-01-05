@@ -47,13 +47,23 @@ def safe_str(value):
     return str(value).strip() or None
 
 def find_image_files(base_dir):
-    """Find all image files in directory"""
+    """Find all image files in directory, excluding Immich-generated directories"""
     image_extensions = {'.jpg', '.jpeg', '.raw', '.cr2', '.nef', '.arw', '.dng', '.tif', '.tiff', '.png'}
     base_path = Path(base_dir)
     
+    # Directories to exclude (Immich-generated content)
+    exclude_dirs = {'library', 'thumbs', 'encoded-video', 'profiles', 'backups'}
+    
     for ext in image_extensions:
-        yield from base_path.rglob(f'*{ext}')
-        yield from base_path.rglob(f'*{ext.upper()}')
+        for filepath in base_path.rglob(f'*{ext}'):
+            # Skip if in excluded directory
+            if any(excluded in filepath.parts for excluded in exclude_dirs):
+                continue
+            yield filepath
+        for filepath in base_path.rglob(f'*{ext.upper()}'):
+            if any(excluded in filepath.parts for excluded in exclude_dirs):
+                continue
+            yield filepath
 
 def main():
     import argparse
