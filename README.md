@@ -2,6 +2,10 @@
 
 A complete setup for turning an old laptop into an automated image server that automatically processes SD cards, extracts metadata, and provides photo management via Immich.
 
+Why? I have been dicking around a lot lately with my camera. I am still learning the tradeoffs on camera settings, aperature, iso, speed settings etc. I also don't want to overload my google photos
+with thousands of images of what could be 1 good shot in a dickload of bad ones. So what to do? My thought was 1 - create a database so I can kinda go back, review where I fucked up the images, IE did
+I fuck the Iso and use the wrong lens? Or what setting could I have doen better. So I set a script to extract those bits. Secondly, I like google photos, but again I don't want to overload it with a bunch of bullshit. So the workflow is I come in, I plug in my SD card. It auto extracts everything. Uploads to my remote server - OR I can also be traveling, connect via tailscale and throw them in. 
+
 ## Features
 
 - **🔄 Auto SD Card Processing**: Automatically detects, copies, and ejects SD cards when inserted
@@ -246,9 +250,10 @@ The test script uses `DSCF1949.JPG` (included in the repo) by default and displa
 ## Configuration
 
 ### Storage Locations
-- **SD Card Copy Destination**: `~/images/` (organized by date: YYYY/MM/DD/)
-- **Immich Library**: `~/images/library/`
-- **External Images**: Mounted at `/mnt/images` in Immich container (read-only)
+- **SD Card Copy Destination**: `~/images/` (internal drive, organized by date: YYYY/MM/DD/)
+  - Automatically fails over to `/mnt/external-storage/images/` when internal drive has <10GB free
+- **Immich Library**: `~/immich-library/` (thumbnails, encoded videos, profiles, phone uploads - separate from source images)
+- **External Images**: Mounted at `/mnt/images` in Immich container (read-only, points to `~/images/`)
 
 ### Database
 - **Host**: localhost
@@ -316,11 +321,14 @@ For the best mobile app experience without certificate warnings, set up a truste
 1. **Detection**: udev rule detects SD card insertion (`/dev/sdc1` or similar)
 2. **Wrapper**: `udev_sd_card_wrapper.sh` runs as root, switches to user context
 3. **Monitor**: `sd_card_monitor.sh` waits for mount, creates lock file
-4. **Copy**: `copy_from_sd.sh` scans `DCIM/` directories, copies new files
-5. **Organization**: Files organized by date extracted from filename or current date
-6. **Duplicate Check**: Skips files that already exist (by filename) - see below
-7. **Eject**: Unmounts and ejects SD card when complete
-8. **Notification**: Logs completion (can add desktop notification if needed)
+4. **Storage Check**: Checks available space on internal drive (`~/images`)
+   - If <10GB free: Uses external drive (`/mnt/external-storage/images/`)
+   - If ≥10GB free: Uses internal drive (`~/images/`)
+5. **Copy**: `copy_from_sd.sh` scans `DCIM/` directories, copies new files to chosen destination
+6. **Organization**: Files organized by date extracted from filename or current date
+7. **Duplicate Check**: Skips files that already exist (by filename) - see below
+8. **Eject**: Unmounts and ejects SD card when complete
+9. **Notification**: Logs completion (can add desktop notification if needed)
 
 ### Duplicate Detection
 
@@ -328,19 +336,11 @@ The copy script performs **recursive duplicate detection** across the entire `~/
 
 - **Checks all subdirectories**: Searches `~/images/` recursively, including:
   - `~/images/2026/01/04/` (SD card copies)
-  - `~/images/library/` (Immich phone uploads)
-  - Any other subdirectories
+  - Any other subdirectories in `~/images/`
 
 - **Filename-based matching**: If a file with the same name exists anywhere in `~/images/`, it will be skipped
 
-- **Prevents duplicates**: If you upload a photo from your phone to Immich (stored in `~/images/library/`), and later insert an SD card with the same file, the copy script will detect it and skip copying
-
-**Example:**
-```
-Phone upload: ~/images/library/DSCF1949.JPG
-SD card copy: Finds existing file → Skips copying
-Result: No duplicate created
-```
+- **Immich artifacts excluded**: Immich's generated files (thumbnails, encoded videos, profiles) are stored in `~/immich-library/` (separate from source images) and are not checked for duplicates
 
 **Note**: This is filename-based only, not content-based. Files with different names but same content will both be copied.
 
@@ -360,6 +360,29 @@ Result: No duplicate created
 - Creates thumbnails and indexes for search
 - Metadata from PostgreSQL is separate from Immich's database
 - Both systems can coexist - Immich for viewing, PostgreSQL for queries
+
+## Testing
+
+### Test Storage Failover
+
+To test that the automatic failover logic works correctly:
+
+```bash
+cd ~/image-server
+./test_storage_failover.sh
+```
+
+This will:
+- Check available space on internal drive
+- Verify external drive is mounted (if configured)
+- Simulate the failover logic
+- Show which destination would be used
+
+**To test with actual SD card:**
+1. Insert SD card
+2. Monitor log: `tail -f ~/image-server.log`
+3. Check which destination was used (internal vs external)
+4. Verify files were copied to the correct location
 
 ## Troubleshooting
 
