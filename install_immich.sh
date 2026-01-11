@@ -130,10 +130,13 @@ if 'immich-server' in data.get('services', {}):
 if 'immich-server' in data.get('services', {}):
     volumes = data['services']['immich-server'].get('volumes', [])
     
-    # Add read-only mount for external library (existing images)
-    if not any('/mnt/images' in v for v in volumes):
-        images_path = os.path.expanduser('~/images')
-        volumes.append(f'{images_path}:/mnt/images:ro')
+    # Add read-write mount for external library (existing images)
+    # Read-write allows Immich to delete files when photos are removed
+    images_path = os.path.expanduser('~/images')
+    # Remove any existing /mnt/images mount (including read-only ones)
+    volumes = [v for v in volumes if '/mnt/images' not in str(v)]
+    # Add read-write mount
+    volumes.append(f'{images_path}:/mnt/images')
     
     # Update Immich's library/upload volume to point to separate directory (NOT in ~/images)
     # This prevents Immich from writing thumbnails/encoded videos into the main images directory
@@ -150,7 +153,7 @@ if 'immich-server' in data.get('services', {}):
             new_volumes.append(f'{immich_library_path}:/usr/src/app/upload')
             upload_mount_found = True
         else:
-            # Keep other volumes (including /mnt/images read-only mount)
+            # Keep other volumes (including /mnt/images read-write mount)
             new_volumes.append(vol)
     
     # If no upload mount was found, add it
@@ -493,7 +496,7 @@ echo ""
 echo "Immich is configured to:"
 echo "  - Use existing PostgreSQL database: immich"
 echo "  - Immich library (thumbnails, encoded videos, etc.): /home/$USER/immich-library"
-echo "  - Access existing source images via: /mnt/images (read-only, points to ~/images)"
+echo "  - Access existing source images via: /mnt/images (read-write, points to ~/images)"
 echo ""
 echo "Next steps:"
 echo "1. Log out and back in (or run: newgrp docker) for docker group to take effect"

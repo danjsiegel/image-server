@@ -253,7 +253,7 @@ The test script uses `DSCF1949.JPG` (included in the repo) by default and displa
 - **SD Card Copy Destination**: `~/images/` (internal drive, organized by date: YYYY/MM/DD/)
   - Automatically fails over to `/mnt/external-storage/images/` when internal drive has <10GB free
 - **Immich Library**: `~/immich-library/` (thumbnails, encoded videos, profiles, phone uploads - separate from source images)
-- **External Images**: Mounted at `/mnt/images` in Immich container (read-only, points to `~/images/`)
+- **External Images**: Mounted at `/mnt/images` in Immich container (read-write, points to `~/images/` - allows file deletion)
 
 ### Database
 - **Host**: localhost
@@ -422,7 +422,7 @@ This will:
 - Database credentials stored in `~/.db_credentials` with `chmod 600` (owner read/write only)
 - `.db_credentials` is in `.gitignore` (not committed to git)
 - Tailscale provides encrypted, authenticated access (no exposed ports)
-- Immich external library mounted read-only (`:ro` flag)
+- Immich external library mounted read-write (allows Immich to delete files when photos are removed)
 - PostgreSQL only listens on localhost by default
 - Docker network access restricted to specific subnet in `pg_hba.conf`
 
