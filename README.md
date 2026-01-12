@@ -184,7 +184,42 @@ This comprehensive script:
 
 This provides a trusted certificate that works seamlessly with the mobile app. See "Setting Up Trusted SSL Certificate" section below for full details.
 
-### 8. Set Up Auto-Start on Boot
+### 8. Security Hardening (Recommended)
+
+After installation, secure your server:
+
+```bash
+./setup_security.sh
+```
+
+This interactive script will:
+- Configure UFW firewall (allows SSH, Tailscale; denies other incoming)
+- Harden SSH (optionally disable password auth, require SSH keys)
+- Install and configure fail2ban (protects SSH from brute force)
+- Enable automatic security updates
+
+**Important Notes:**
+- The script will prompt before disabling password authentication
+- Ensure SSH keys are set up and working before disabling password auth
+- Test SSH access from another terminal before closing your current session
+- All changes can be verified using the commands shown at the end of the script
+
+**Verification Commands:**
+```bash
+# Check firewall
+sudo ufw status verbose
+
+# Check SSH config
+sudo sshd -T | grep -E 'passwordauthentication|pubkeyauthentication|permitrootlogin'
+
+# Check fail2ban
+sudo fail2ban-client status sshd
+
+# Check automatic updates
+cat /etc/apt/apt.conf.d/20auto-upgrades
+```
+
+### 9. Set Up Auto-Start on Boot
 
 ```bash
 ./setup_autostart.sh
@@ -243,6 +278,10 @@ The test script uses `DSCF1949.JPG` (included in the repo) by default and displa
   ├── install_immich.sh      # Immich installation and configuration
   ├── setup_cron.sh          # Sets up cron job for metadata processing
   ├── setup_autostart.sh     # Configures auto-start on boot
+  ├── setup_security.sh      # Security hardening (firewall, SSH, fail2ban, updates)
+  ├── backup_to_s3.py        # S3 backup script
+  ├── setup_s3_backup.sh     # S3 backup setup script
+  ├── setup_backup_cron.sh   # Sets up cron job for S3 backup
   ├── test_metadata.py       # Test script (uses DSCF1949.JPG)
   └── DSCF1949.JPG           # Test image for metadata extraction
 ```
@@ -440,11 +479,18 @@ The setup scripts automatically handle:
 
 **To customize username**: Edit `config.sh` before running setup scripts, or set `IMAGE_SERVER_USER` environment variable.
 
-4. **Firewall**: Consider enabling UFW firewall (if not using Tailscale exclusively):
+4. **Security Hardening** (Recommended):
    ```bash
-   sudo ufw enable
-   sudo ufw allow from <tailscale-subnet>
+   ./setup_security.sh
    ```
+   
+   This script configures:
+   - UFW firewall (denies incoming by default, allows SSH and Tailscale)
+   - SSH hardening (optionally disables password auth, requires SSH keys)
+   - Fail2ban (protects SSH from brute force attacks)
+   - Automatic security updates
+   
+   **Important**: If you disable password authentication, ensure SSH keys are set up and working before closing your session!
 
 5. **Regular updates**: Keep system and Docker images updated:
    ```bash
