@@ -60,6 +60,10 @@ docker-compose.override.yml
 .env.local
 config.local.*
 
+# AWS credentials (stored in ~/.aws/credentials, not in repo)
+.aws/
+*.aws
+
 # User-specific paths (udev rules need to be customized per user)
 # Note: udev_sd_card.rules contains placeholder "yourusername" - update before use
 

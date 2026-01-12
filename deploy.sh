@@ -31,6 +31,12 @@ scp process_new_images.py "$REMOTE_HOST:$REMOTE_DIR/"
 scp image-server-logrotate "$REMOTE_HOST:$REMOTE_DIR/"
 scp setup_external_drive.sh "$REMOTE_HOST:$REMOTE_DIR/"
 scp test_storage_failover.sh "$REMOTE_HOST:$REMOTE_DIR/"
+scp backup_to_s3.py "$REMOTE_HOST:$REMOTE_DIR/"
+scp backup_config.sh "$REMOTE_HOST:$REMOTE_DIR/"
+scp setup_s3_backup.sh "$REMOTE_HOST:$REMOTE_DIR/"
+scp create_backup_schema.sh "$REMOTE_HOST:$REMOTE_DIR/"
+scp create_backup_schema.sql "$REMOTE_HOST:$REMOTE_DIR/"
+scp setup_backup_cron.sh "$REMOTE_HOST:$REMOTE_DIR/"
 
 # Make scripts executable
 ssh "$REMOTE_HOST" "chmod +x $REMOTE_DIR/*.sh $REMOTE_DIR/*.py 2>/dev/null || true"
