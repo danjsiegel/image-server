@@ -35,3 +35,24 @@
     copytruncate
 }
 
+/home/yourusername/image-server-backup.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0600 yourusername yourusername
+    copytruncate
+}
+
+/home/yourusername/image-server-backup-cron.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0600 yourusername yourusername
+    copytruncate
+}
