@@ -275,6 +275,7 @@ The test script uses `DSCF1949.JPG` (included in the repo) by default and displa
   ├── udev_sd_card.rules     # udev rules for auto-detection
   ├── udev_sd_card_wrapper.sh # Wrapper for udev execution
   ├── process_new_images.py  # Extracts metadata and inserts into DB
+  ├── trigger_immich_scan.py # Triggers Immich library scan via API
   ├── install_immich.sh      # Immich installation and configuration
   ├── setup_cron.sh          # Sets up cron job for metadata processing
   ├── setup_autostart.sh     # Configures auto-start on boot
@@ -366,8 +367,9 @@ For the best mobile app experience without certificate warnings, set up a truste
 5. **Copy**: `copy_from_sd.sh` scans `DCIM/` directories, copies new files to chosen destination
 6. **Organization**: Files organized by date extracted from filename or current date
 7. **Duplicate Check**: Skips files that already exist (by filename) - see below
-8. **Eject**: Unmounts and ejects SD card when complete
-9. **Notification**: Logs completion (can add desktop notification if needed)
+8. **Immich Scan**: Triggers Immich library scan (if API key configured) so new images appear immediately
+9. **Eject**: Unmounts and ejects SD card when complete
+10. **Notification**: Logs completion (can add desktop notification if needed)
 
 ### Duplicate Detection
 
@@ -399,6 +401,45 @@ The copy script performs **recursive duplicate detection** across the entire `~/
 - Creates thumbnails and indexes for search
 - Metadata from PostgreSQL is separate from Immich's database
 - Both systems can coexist - Immich for viewing, PostgreSQL for queries
+
+#### Automatic Library Scan After SD Card
+
+When you insert an SD card, the system can automatically trigger an Immich library scan so new images appear immediately. To enable this:
+
+1. **Create an Immich API key**:
+   - In Immich, click your profile icon → API Keys
+   - Create a new key and copy it
+
+2. **Save the API key**:
+   ```bash
+   echo "your-api-key-here" > ~/image-server/.immich_api_key
+   chmod 600 ~/image-server/.immich_api_key
+   ```
+
+3. **Test it manually**:
+   ```bash
+   cd ~/image-server
+   source venv/bin/activate
+   python3 trigger_immich_scan.py
+   ```
+
+The SD card processing script will now automatically trigger a scan after copying files.
+
+#### RAW+JPEG Auto-Stacking
+
+If you shoot RAW+JPEG (e.g., `.RAF` + `.JPG` files), Immich can automatically stack them together:
+
+1. **Enable stacking in Immich**:
+   - Go to Administration → Settings → Image
+   - Enable "Stack RAW images with JPEG pairs"
+   - Save settings
+
+2. **How it works**:
+   - When Immich scans the library, it detects RAW+JPEG pairs with matching names
+   - The JPEG becomes the "cover" image, RAW is stacked underneath
+   - You see one photo in the timeline but can access both versions
+
+**Supported RAW formats**: `.raf` (Fujifilm), `.cr2` (Canon), `.nef` (Nikon), `.arw` (Sony), `.dng`, `.raw`, and more.
 
 ## Testing
 

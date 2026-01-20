@@ -48,7 +48,7 @@ def safe_str(value):
 
 def find_image_files(base_dir):
     """Find all image files in directory, excluding Immich-generated directories"""
-    image_extensions = {'.jpg', '.jpeg', '.raw', '.cr2', '.nef', '.arw', '.dng', '.tif', '.tiff', '.png'}
+    image_extensions = {'.jpg', '.jpeg', '.raw', '.cr2', '.nef', '.arw', '.dng', '.tif', '.tiff', '.png', '.raf'}
     base_path = Path(base_dir)
     
     # Directories to exclude (Immich-generated content)
