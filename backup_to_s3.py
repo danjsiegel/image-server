@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Image extensions to backup
-IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.raw', '.cr2', '.nef', '.arw', '.dng', '.tif', '.tiff', '.png'}
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.raw', '.cr2', '.nef', '.arw', '.dng', '.tif', '.tiff', '.png', '.raf'}
 IMAGE_EXTENSIONS.update({ext.upper() for ext in IMAGE_EXTENSIONS})
 
 # Directories to exclude (Immich-generated content)

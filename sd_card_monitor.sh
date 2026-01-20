@@ -96,7 +96,7 @@ log "Destination: $DEST_BASE"
 SCRIPT_DIR="/home/$USER/image-server"
 "$SCRIPT_DIR/copy_from_sd.sh" "$SD_MOUNT" "$DEST_BASE"
 
-# Eject the SD card - find the device from mount point
+# Eject the SD card FIRST - so user can remove it while Immich processes
 SD_DEVICE=$(findmnt -n -o SOURCE --target "$SD_MOUNT" 2>/dev/null | head -1)
 if [ -z "$SD_DEVICE" ]; then
     # Fallback: get device from lsblk
@@ -110,7 +110,33 @@ if [ -n "$SD_DEVICE" ]; then
     eject "$SD_DEVICE" 2>/dev/null || true
 fi
 
-log "SD card processing complete and ejected"
+log "SD card ejected - triggering Immich scan in background..."
+
+# Trigger Immich library scan and auto-stacking (in background so user doesn't wait)
+if [ -f "$SCRIPT_DIR/.immich_api_key" ]; then
+    if [ -f "$SCRIPT_DIR/venv/bin/python3" ]; then
+        (
+            # Run scan, wait a bit for it to complete, then stack
+            "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/trigger_immich_scan.py" >> "$LOG_FILE" 2>&1 || \
+                log "Warning: Immich scan trigger failed"
+            
+            # Wait for scan to process new files before stacking
+            sleep 30
+            
+            "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/immich_auto_stack.py" >> "$LOG_FILE" 2>&1 || \
+                log "Warning: Auto-stack failed"
+            
+            log "Immich scan and stacking complete"
+        ) &
+        log "Immich processing started in background (PID: $!)"
+    else
+        log "Warning: Python venv not found, skipping Immich processing"
+    fi
+else
+    log "No Immich API key configured, skipping Immich processing"
+fi
+
+log "SD card processing complete"
 
 # Remove lock (may need sudo if created by root)
 sudo rm -f "$LOCK_FILE" 2>/dev/null || rm -f "$LOCK_FILE" 2>/dev/null || true

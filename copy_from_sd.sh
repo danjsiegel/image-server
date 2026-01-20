@@ -91,6 +91,7 @@ done < <(find "$SEARCH_DIR" -type f \( \
     -iname "*.jpg" -o \
     -iname "*.jpeg" -o \
     -iname "*.raw" -o \
+    -iname "*.raf" -o \
     -iname "*.cr2" -o \
     -iname "*.nef" -o \
     -iname "*.arw" -o \
