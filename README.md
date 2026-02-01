@@ -448,6 +448,16 @@ python3 immich_auto_stack.py            # Actually stack
 
 **Supported RAW formats**: `.raf` (Fujifilm), `.cr2` (Canon), `.nef` (Nikon), `.arw` (Sony), `.dng`, `.raw`, and more.
 
+**Automatic stacking for manual uploads:**
+If you upload photos via the Immich UI (e.g., from your phone at a hotel), stacking happens automatically via a cron job:
+
+```bash
+cd ~/image-server
+./setup_immich_stacking_cron.sh
+```
+
+This runs every 2 hours to catch any unstacked RAW+JPEG pairs from manual uploads. The script is idempotent - it won't re-stack already stacked pairs.
+
 ## Testing
 
 ### Test Storage Failover
@@ -500,6 +510,41 @@ This will:
 - Check for VectorChord issues: `sudo grep vchord /etc/postgresql/16/main/postgresql.conf`
 - If VectorChord isn't installed, comment out `shared_preload_libraries` line
 - Check logs: `sudo journalctl -u postgresql@16-main -n 50`
+
+## Upgrading Immich
+
+When a new Immich version is released:
+
+```bash
+# On the server
+cd ~/image-server
+./upgrade_immich.sh              # Upgrade to latest stable
+./upgrade_immich.sh v1.123.0     # Or specify a version
+```
+
+**What the script does:**
+1. Backs up `.env`, `docker-compose.yml`, and nginx config
+2. Backs up the PostgreSQL database
+3. Prompts you to review release notes (check for breaking changes!)
+4. Pulls new Docker images
+5. Restarts services
+6. Verifies the upgrade
+
+**Backups are stored in:** `~/immich-backups/backup_YYYYMMDD_HHMMSS/`
+
+**To rollback if something breaks:**
+```bash
+cd ~/immich-app
+cp ~/immich-backups/backup_XXXXXXXX_XXXXXX/.env.backup .env
+docker compose pull
+docker compose up -d
+```
+
+**Check for updates:**
+- [Immich Releases](https://github.com/immich-app/immich/releases)
+- [Immich Discord](https://discord.gg/D8JsnBEuKb) for announcements
+
+---
 
 ## Security Considerations
 

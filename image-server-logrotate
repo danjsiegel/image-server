@@ -33,6 +33,7 @@
     notifempty
     create 0600 root root
     copytruncate
+    su root root
 }
 
 /home/yourusername/image-server-backup.log {
@@ -47,6 +48,17 @@
 }
 
 /home/yourusername/image-server-backup-cron.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0600 yourusername yourusername
+    copytruncate
+}
+
+/home/yourusername/image-server-stacking.log {
     daily
     rotate 7
     compress
