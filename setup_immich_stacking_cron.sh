@@ -28,8 +28,8 @@ fi
 touch "$CRON_LOG"
 chmod 600 "$CRON_LOG"
 
-# Build cron command
-CRON_CMD="cd $SCRIPT_DIR && source venv/bin/activate && python3 immich_auto_stack.py >> $CRON_LOG 2>&1"
+# Build cron command (use bash -c so 'source' works; cron runs with /bin/sh by default)
+CRON_CMD="/bin/bash -c 'cd $SCRIPT_DIR && source venv/bin/activate && python3 immich_auto_stack.py' >> $CRON_LOG 2>&1"
 
 # Check if cron job already exists
 CRON_EXISTS=$(crontab -l 2>/dev/null | grep -c "immich_auto_stack.py" || echo "0")

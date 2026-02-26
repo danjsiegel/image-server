@@ -9,7 +9,8 @@ CRON_LOG="/home/$USER/image-server-cron.log"
 touch "$CRON_LOG"
 chmod 600 "$CRON_LOG" 2>/dev/null || true
 
-CRON_JOB="*/30 * * * * cd $SCRIPT_DIR && source venv/bin/activate && python3 process_new_images.py >> $CRON_LOG 2>&1"
+# Use bash -c so 'source' works; cron runs with /bin/sh by default
+CRON_JOB="*/30 * * * * /bin/bash -c 'cd $SCRIPT_DIR && source venv/bin/activate && python3 process_new_images.py' >> $CRON_LOG 2>&1"
 
 # Check if cron job already exists
 if crontab -l 2>/dev/null | grep -q "process_new_images.py"; then

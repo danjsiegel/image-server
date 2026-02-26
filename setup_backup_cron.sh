@@ -76,8 +76,8 @@ case $SCHEDULE_CHOICE in
         ;;
 esac
 
-# Create cron job
-CRON_JOB="$CRON_SCHEDULE cd $SCRIPT_DIR && source backup_config.sh && source venv/bin/activate && python3 backup_to_s3.py >> $CRON_LOG 2>&1"
+# Create cron job (use bash -c so 'source' works; cron runs with /bin/sh by default)
+CRON_JOB="$CRON_SCHEDULE /bin/bash -c 'cd $SCRIPT_DIR && source backup_config.sh && source venv/bin/activate && python3 backup_to_s3.py' >> $CRON_LOG 2>&1"
 
 # Check if cron job already exists
 if crontab -l 2>/dev/null | grep -q "backup_to_s3.py"; then
