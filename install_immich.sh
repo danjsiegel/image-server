@@ -89,7 +89,7 @@ sed -i "s|DB_DATABASE_NAME=.*|DB_DATABASE_NAME=immich|" .env
 sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" .env
 
 # Add DB_URL for external PostgreSQL connection
-DB_URL="postgresql://image_server:$DB_PASSWORD@$HOST_IP:5432/immich"
+DB_URL="postgresql://image_server:$DB_PASSWORD@172.17.0.1:5432/immich"
 if grep -q "^DB_URL=" .env; then
     sed -i "s|^DB_URL=.*|DB_URL='$DB_URL'|" .env
 else
@@ -426,7 +426,14 @@ if 'nginx' not in data.get('services', {}):
             ''
         ]
     
+    # HTTP redirect server (port 80)
     nginx_conf_lines = [
+        'server {',
+        '    listen 80;',
+        f'    server_name {nginx_domain};',
+        '    return 301 https://$host$request_uri;',
+        '}',
+        '',
         'server {',
         '    listen 443 ssl http2;',
         f'    server_name {nginx_domain};',
@@ -453,7 +460,8 @@ if 'nginx' not in data.get('services', {}):
         '        proxy_set_header Host $host;',
         '        proxy_set_header X-Real-IP $remote_addr;',
         '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
-        '        proxy_set_header X-Forwarded-Proto $scheme;',
+        '        # CRITICAL: Force Immich to generate HTTPS share links for Tailscale Funnel',
+        '        proxy_set_header X-Forwarded-Proto https;',
         '        proxy_cache_bypass $http_upgrade;',
         '        proxy_connect_timeout 600;',
         '        proxy_send_timeout 600;',
@@ -466,11 +474,11 @@ if 'nginx' not in data.get('services', {}):
     with open(os.path.join(nginx_conf_dir, 'immich.conf'), 'w') as f:
         f.write(nginx_conf)
     
-    # Add nginx service to docker-compose
+    # Add nginx service to docker-compose (with port 80 for HTTP→HTTPS redirect)
     data['services']['nginx'] = {
         'image': 'nginx:alpine',
         'container_name': 'immich-nginx',
-        'ports': ['443:443'],
+        'ports': ['80:80', '443:443'],
         'volumes': [
             f'{nginx_conf_dir}/immich.conf:/etc/nginx/conf.d/default.conf:ro',
             f'{nginx_conf_dir}/ssl:/etc/nginx/ssl:ro'
