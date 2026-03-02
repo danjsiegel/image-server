@@ -239,262 +239,134 @@ elif sudo grep -q "^listen_addresses = 'localhost'" "$PG_CONF" 2>/dev/null || ! 
 fi
 
 echo ""
-echo "=== Optional: Nginx Reverse Proxy with HTTPS ==="
+echo "=== Nginx Reverse Proxy with Tailscale Funnel ==="
 
 # Check for environment variables
 SETUP_NGINX="${SETUP_NGINX:-}"
 NGINX_DOMAIN="${NGINX_DOMAIN:-}"
-NGINX_SSL_TYPE="${NGINX_SSL_TYPE:-}"
 
 if [ -z "$SETUP_NGINX" ]; then
-    read -p "Set up nginx reverse proxy with HTTPS? (y/n) " SETUP_NGINX
+    read -p "Set up nginx reverse proxy with Tailscale Funnel? (y/n) " SETUP_NGINX
 fi
 
 if [ "$SETUP_NGINX" = "y" ] || [ "$SETUP_NGINX" = "Y" ]; then
-    # Export variables for Python script
     export SETUP_NGINX NGINX_DOMAIN
-    
-    # Get domain/hostname before modifying docker-compose
+
     if [ -z "$NGINX_DOMAIN" ]; then
         echo ""
-        echo "Enter your domain name or Tailscale hostname:"
-        read -p "Domain (e.g., yourmachinea.tail012354.ts.net): " NGINX_DOMAIN
+        echo "Enter your Tailscale hostname:"
+        read -p "Domain (e.g., yourmachine.tail012345.ts.net): " NGINX_DOMAIN
         export NGINX_DOMAIN
     fi
-    
+
     if [ -n "$NGINX_DOMAIN" ]; then
-        # SSL certificate choice (do this first so certs exist when creating config)
-        if [ -z "$NGINX_SSL_TYPE" ]; then
-            echo ""
-            echo "SSL certificate options:"
-            echo "1. Let's Encrypt (requires publicly accessible domain)"
-            echo "2. Self-signed (for Tailscale/testing)"
-            read -p "Choice [1 or 2]: " NGINX_SSL_TYPE
-        fi
-        
-        # Create SSL directory and generate certificates if needed
-        mkdir -p "$IMMICH_DIR/nginx/ssl"
-        
-        if [ "$NGINX_SSL_TYPE" = "1" ]; then
-            echo ""
-            echo "Setting up Let's Encrypt certificate..."
-            
-            # Install certbot on host
-            if ! command -v certbot &> /dev/null; then
-                sudo apt-get update
-                sudo apt-get install -y certbot
-            fi
-            
-            # Temporarily add HTTP server block for Let's Encrypt validation
-            # We'll need port 80 for validation
-            python3 << PYTHON_LE
+        NGINX_CONF_DIR="$IMMICH_DIR/nginx"
+        mkdir -p "$NGINX_CONF_DIR"
+
+        echo "Writing nginx config..."
+        cat > "$NGINX_CONF_DIR/immich.conf" << NGINXEOF
+server {
+    listen 8080;
+    server_name ${NGINX_DOMAIN};
+
+    client_max_body_size 50000M;
+
+    # Trust Docker bridge gateway so X-Forwarded-For is unwrapped correctly
+    set_real_ip_from 172.16.0.0/12;
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
+    # Block search/faces/people for public users
+    location ~ ^/(search|api/search|api/faces|api/people) {
+        allow 100.64.0.0/10;
+        deny all;
+
+        proxy_pass http://immich-server:2283;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # Public - share pages and API (Immich handles its own auth on API calls)
+    location ~ ^/(share|_app|api|service-worker.js|favicon.ico) {
+        proxy_pass http://immich-server:2283;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 600;
+        proxy_send_timeout 600;
+        proxy_connect_timeout 600;
+    }
+
+    # Private - Tailscale VPN only (100.64.0.0/10 is the entire Tailscale address space)
+    location / {
+        allow 100.64.0.0/10;
+        deny all;
+
+        proxy_pass http://immich-server:2283;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 600;
+        proxy_send_timeout 600;
+        proxy_connect_timeout 600;
+    }
+}
+NGINXEOF
+        echo "✓ nginx config written to $NGINX_CONF_DIR/immich.conf"
+
+        # Add nginx service to docker-compose
+        python3 << PYTHON_NGINX
 import yaml
 import os
 
 with open('docker-compose.yml', 'r') as f:
     data = yaml.safe_load(f)
 
-# Temporarily add port 80 to nginx for Let's Encrypt
-if 'nginx' in data.get('services', {}):
-    ports = data['services']['nginx'].get('ports', [])
-    if '80:80' not in [str(p) for p in ports]:
-        ports.append('80:80')
-        data['services']['nginx']['ports'] = ports
+nginx_conf_dir = os.path.expanduser('~/immich-app/nginx')
+
+data['services']['nginx'] = {
+    'image': 'nginx:alpine',
+    'container_name': 'immich-nginx',
+    'ports': ['127.0.0.1:8080:8080'],
+    'volumes': [
+        f'{nginx_conf_dir}/immich.conf:/etc/nginx/conf.d/default.conf:ro',
+    ],
+    'depends_on': ['immich-server'],
+    'restart': 'unless-stopped'
+}
 
 with open('docker-compose.yml', 'w') as f:
     yaml.dump(data, f, default_flow_style=False, sort_keys=False)
-PYTHON_LE
-            
-            # Update nginx config to include HTTP server for Let's Encrypt
-            nginx_conf_dir="$IMMICH_DIR/nginx"
-            # HTTP block removed - using HTTPS only
-            
-            # Restart nginx with port 80
-            cd "$IMMICH_DIR"
-            docker compose up -d nginx
-            
-            # Use Tailscale Funnel or direct access for validation
-            echo ""
-            echo "For Let's Encrypt validation with Tailscale:"
-            echo "Option 1: Use Tailscale Funnel (recommended)"
-            echo "  Run: tailscale funnel --bg 80"
-            echo "  Then run certbot (will be done automatically)"
-            echo ""
-            echo "Option 2: Make server publicly accessible on port 80"
-            echo ""
-            read -p "Have you enabled Tailscale Funnel or made port 80 accessible? (y/n) " FUNNEL_READY
-            
-            if [ "$FUNNEL_READY" = "y" ] || [ "$FUNNEL_READY" = "Y" ]; then
-                # Create certbot webroot directory
-                sudo mkdir -p /var/www/certbot
-                
-                # Get certificate
-                sudo certbot certonly --webroot \
-                    -w /var/www/certbot \
-                    -d "$NGINX_DOMAIN" \
-                    --email "${USER}@${NGINX_DOMAIN}" \
-                    --agree-tos \
-                    --non-interactive || {
-                    echo "⚠ Certbot failed. You may need to:"
-                    echo "  1. Enable Tailscale Funnel: tailscale funnel --bg 80"
-                    echo "  2. Or make your server publicly accessible on port 80"
-                    echo "  3. Then re-run this script"
-                    NGINX_SSL_TYPE="2"
-                }
-                
-                if [ "$NGINX_SSL_TYPE" != "2" ] && [ -f "/etc/letsencrypt/live/$NGINX_DOMAIN/fullchain.pem" ]; then
-                    # Copy certificates to nginx directory
-                    sudo cp /etc/letsencrypt/live/$NGINX_DOMAIN/fullchain.pem "$nginx_conf_dir/ssl/immich.crt"
-                    sudo cp /etc/letsencrypt/live/$NGINX_DOMAIN/privkey.pem "$nginx_conf_dir/ssl/immich.key"
-                    sudo chown $USER:$USER "$nginx_conf_dir/ssl/"*.{crt,key}
-                    
-                    # Update nginx config to use Let's Encrypt certs
-                    sed -i "s|ssl_certificate /etc/nginx/ssl/immich.crt;|ssl_certificate /etc/letsencrypt/live/$NGINX_DOMAIN/fullchain.pem;|" "$nginx_conf_dir/immich.conf"
-                    sed -i "s|ssl_certificate_key /etc/nginx/ssl/immich.key;|ssl_certificate_key /etc/letsencrypt/live/$NGINX_DOMAIN/privkey.pem;|" "$nginx_conf_dir/immich.conf"
-                    
-                    # Mount Let's Encrypt directory in docker-compose
-                    python3 << PYTHON_CERT
-import yaml
 
-with open('docker-compose.yml', 'r') as f:
-    data = yaml.safe_load(f)
+print("✓ Added nginx service to docker-compose.yml")
+PYTHON_NGINX
 
-if 'nginx' in data.get('services', {}):
-    volumes = data['services']['nginx'].get('volumes', [])
-    # Remove old ssl mount, add Let's Encrypt mount
-    volumes = [v for v in volumes if '/etc/nginx/ssl' not in str(v)]
-    volumes.append('/etc/letsencrypt:/etc/letsencrypt:ro')
-    data['services']['nginx']['volumes'] = volumes
-    
-    with open('docker-compose.yml', 'w') as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
-PYTHON_CERT
-                    
-                    # Set up auto-renewal
-                    (crontab -l 2>/dev/null | grep -v "certbot renew"; echo "0 3 * * * certbot renew --quiet --deploy-hook 'cd $IMMICH_DIR && docker compose restart nginx'") | crontab -
-                    
-                    echo "✓ Let's Encrypt certificate installed and auto-renewal configured"
-                    docker compose restart nginx
-                else
-                    echo "⚠ Falling back to self-signed certificate"
-                    NGINX_SSL_TYPE="2"
-                fi
-            else
-                echo "⚠ Skipping Let's Encrypt setup. Using self-signed certificate."
-                NGINX_SSL_TYPE="2"
-            fi
-        fi
-        
-        if [ "$NGINX_SSL_TYPE" = "2" ]; then
-            # Generate SSL certificates
-            openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-                -keyout "$IMMICH_DIR/nginx/ssl/immich.key" \
-                -out "$IMMICH_DIR/nginx/ssl/immich.crt" \
-                -subj "/C=US/ST=State/L=City/O=Organization/CN=$NGINX_DOMAIN"
-            echo "✓ SSL certificates generated"
-        fi
-        
         echo ""
-        echo "Nginx will be added to docker-compose.yml"
-        echo "Re-running docker-compose modification to add nginx service..."
-        
-        # Re-run Python script to add nginx service (certs now exist)
-        python3 << PYTHON_SCRIPT
-import yaml
-import os
+        echo "=== Tailscale Funnel Setup ==="
+        echo "Configuring Tailscale Funnel to forward HTTPS traffic to nginx..."
+        if command -v tailscale &> /dev/null; then
+            sudo tailscale funnel reset 2>/dev/null || true
+            sudo tailscale funnel --bg --https=443 http://127.0.0.1:8080
+            echo "✓ Tailscale Funnel configured: https://$NGINX_DOMAIN → localhost:8080"
+        else
+            echo "⚠ Tailscale not found. Run manually after install:"
+            echo "  sudo tailscale funnel --bg --https=443 http://127.0.0.1:8080"
+        fi
 
-with open('docker-compose.yml', 'r') as f:
-    data = yaml.safe_load(f)
-
-# Add nginx service if not already present
-if 'nginx' not in data.get('services', {}):
-    nginx_conf_dir = os.path.expanduser('~/immich-app/nginx')
-    os.makedirs(nginx_conf_dir, exist_ok=True)
-    os.makedirs(os.path.join(nginx_conf_dir, 'ssl'), exist_ok=True)
-    
-    nginx_domain = os.environ.get('NGINX_DOMAIN', '')
-    
-    # Create nginx config file
-    # Build config with proper $ escaping for nginx variables
-    # Include SSL certificate paths (will be added if certificates exist)
-    ssl_cert_exists = os.path.exists(os.path.join(nginx_conf_dir, 'ssl', 'immich.crt'))
-    ssl_lines = []
-    if ssl_cert_exists:
-        ssl_lines = [
-            '    ssl_certificate /etc/nginx/ssl/immich.crt;',
-            '    ssl_certificate_key /etc/nginx/ssl/immich.key;',
-            ''
-        ]
-    
-    # HTTP redirect server (port 80)
-    nginx_conf_lines = [
-        'server {',
-        '    listen 80;',
-        f'    server_name {nginx_domain};',
-        '    return 301 https://$host$request_uri;',
-        '}',
-        '',
-        'server {',
-        '    listen 443 ssl http2;',
-        f'    server_name {nginx_domain};',
-    ]
-    nginx_conf_lines.extend(ssl_lines)
-    nginx_conf_lines.extend([
-        '    client_max_body_size 50000M;',
-        '',
-        '    # Immich mobile app discovery endpoint',
-        '    location = /.well-known/immich {',
-        '        proxy_pass http://immich-server:2283;',
-        '        proxy_http_version 1.1;',
-        '        proxy_set_header Host $host;',
-        '        proxy_set_header X-Real-IP $remote_addr;',
-        '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
-        '        proxy_set_header X-Forwarded-Proto $scheme;',
-        '    }',
-        '',
-        '    location / {',
-        '        proxy_pass http://immich-server:2283;',
-        '        proxy_http_version 1.1;',
-        '        proxy_set_header Upgrade $http_upgrade;',
-        "        proxy_set_header Connection 'upgrade';",
-        '        proxy_set_header Host $host;',
-        '        proxy_set_header X-Real-IP $remote_addr;',
-        '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
-        '        # CRITICAL: Force Immich to generate HTTPS share links for Tailscale Funnel',
-        '        proxy_set_header X-Forwarded-Proto https;',
-        '        proxy_cache_bypass $http_upgrade;',
-        '        proxy_connect_timeout 600;',
-        '        proxy_send_timeout 600;',
-        '        proxy_read_timeout 600;',
-        '    }',
-        '}'
-    ])
-    nginx_conf = '\n'.join(nginx_conf_lines)
-    
-    with open(os.path.join(nginx_conf_dir, 'immich.conf'), 'w') as f:
-        f.write(nginx_conf)
-    
-    # Add nginx service to docker-compose (with port 80 for HTTP→HTTPS redirect)
-    data['services']['nginx'] = {
-        'image': 'nginx:alpine',
-        'container_name': 'immich-nginx',
-        'ports': ['80:80', '443:443'],
-        'volumes': [
-            f'{nginx_conf_dir}/immich.conf:/etc/nginx/conf.d/default.conf:ro',
-            f'{nginx_conf_dir}/ssl:/etc/nginx/ssl:ro'
-        ],
-        'depends_on': ['immich-server'],
-        'restart': 'unless-stopped'
-    }
-    
-    with open('docker-compose.yml', 'w') as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
-    
-    print("✓ Added nginx service to docker-compose.yml")
-PYTHON_SCRIPT
-        
-        echo "✓ Nginx reverse proxy configured in docker-compose"
-        echo "  Access at: https://$NGINX_DOMAIN (after starting containers)"
+        echo "✓ Nginx reverse proxy configured"
+        echo "  Share links available at: https://$NGINX_DOMAIN/share/..."
+        echo "  Full UI (VPN only) at:    https://$NGINX_DOMAIN"
     fi
 fi
 
@@ -510,13 +382,16 @@ echo "Next steps:"
 echo "1. Log out and back in (or run: newgrp docker) for docker group to take effect"
 echo "2. Start Immich: cd ~/immich-app && docker compose up -d"
 if [ "$SETUP_NGINX" = "y" ] || [ "$SETUP_NGINX" = "Y" ]; then
-    echo "3. Access at: https://$NGINX_DOMAIN (or http://localhost:2283)"
+    echo "3. VPN access:    https://$NGINX_DOMAIN"
+    echo "   Share links:   https://$NGINX_DOMAIN/share/..."
 else
     echo "3. Access at: http://localhost:2283 or http://$(hostname -I | awk '{print $1}'):2283"
 fi
 echo "4. Create your admin account"
 echo "5. Set up external library in Immich UI: Administration -> External Libraries"
 echo "   - Add import path: /mnt/images"
+echo "6. On shared links: disable 'Show metadata' in the share settings to prevent"
+echo "   public users from seeing EXIF data on shared photos"
 echo ""
 echo "Note: If PostgreSQL fails to start, check /etc/postgresql/16/main/postgresql.conf"
 echo "      and remove any vchord.so references if VectorChord isn't installed."
