@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Default Immich URL (via nginx proxy)
-DEFAULT_IMMICH_URL = "https://localhost"
+DEFAULT_IMMICH_URL = "https://your-tailscale-hostname.ts.net"
 
 # SSL context for self-signed certs
 ssl_context = ssl.create_default_context()

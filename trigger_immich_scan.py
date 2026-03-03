@@ -64,7 +64,7 @@ def api_request(url, api_key, method='GET', data=None):
     if data:
         req.data = json.dumps(data).encode('utf-8')
     
-    # Create SSL context that doesn't verify certs (for localhost with self-signed)
+    # Create SSL context that doesn't verify certs (for  with self-signed)
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
