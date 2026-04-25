@@ -1,5 +1,9 @@
 # Database credentials
 .db_credentials
+
+# Immich secrets
+.immich_api_key
+.immich_url
 *.db
 *.sqlite
 *.sqlite3

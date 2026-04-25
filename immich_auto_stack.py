@@ -27,13 +27,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Default Immich URL (via nginx proxy)
+# Default Immich URL - override via IMMICH_URL env var or ~/.immich_url file
 DEFAULT_IMMICH_URL = "https://your-tailscale-hostname.ts.net"
 
 # SSL context for self-signed certs
 ssl_context = ssl.create_default_context()
 ssl_context.check_hostname = False
 ssl_context.verify_mode = ssl.CERT_NONE
+
+
+def get_immich_url():
+    """Get Immich URL from environment or config file"""
+    url = os.environ.get('IMMICH_URL')
+    if url:
+        return url
+    config_file = os.path.expanduser('~/image-server/.immich_url')
+    if os.path.exists(config_file):
+        with open(config_file, 'r') as f:
+            return f.read().strip()
+    return DEFAULT_IMMICH_URL
 
 
 def get_api_key():
@@ -189,8 +201,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Auto-stack RAW+JPEG pairs in Immich')
-    parser.add_argument('--url', default=DEFAULT_IMMICH_URL,
-                        help=f'Immich server URL (default: {DEFAULT_IMMICH_URL})')
+    parser.add_argument('--url', default=get_immich_url(),
+                        help='Immich server URL (default: from .immich_url or IMMICH_URL env)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Show what would be stacked without making changes')
     args = parser.parse_args()

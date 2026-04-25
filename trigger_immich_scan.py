@@ -32,8 +32,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Default Immich URL (via nginx proxy - port 2283 not exposed to host)
-DEFAULT_IMMICH_URL = "https://localhost"
+# Default Immich URL - override via IMMICH_URL env var or ~/.immich_url file
+DEFAULT_IMMICH_URL = "https://your-tailscale-hostname.ts.net"
+
+
+def get_immich_url():
+    """Get Immich URL from environment or config file"""
+    url = os.environ.get('IMMICH_URL')
+    if url:
+        return url
+    config_file = os.path.expanduser('~/image-server/.immich_url')
+    if os.path.exists(config_file):
+        with open(config_file, 'r') as f:
+            return f.read().strip()
+    return DEFAULT_IMMICH_URL
 
 
 def get_api_key():
@@ -132,8 +144,8 @@ def trigger_stacking_job(base_url, api_key, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(description='Trigger Immich library scan and stacking')
-    parser.add_argument('--url', default=DEFAULT_IMMICH_URL, 
-                        help=f'Immich server URL (default: {DEFAULT_IMMICH_URL})')
+    parser.add_argument('--url', default=get_immich_url(),
+                        help='Immich server URL (default: from .immich_url or IMMICH_URL env)')
     parser.add_argument('--stack', action='store_true',
                         help='Also show stacking configuration info')
     parser.add_argument('--dry-run', action='store_true',
