@@ -105,7 +105,7 @@ def fetch_all_assets(base_url, api_key):
         payload = {
             'size': size,
             'page': page,
-            'withStacked': True
+            'withStacked': False
         }
         
         url = f"{base_url}/api/search/metadata"

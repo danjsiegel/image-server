@@ -116,16 +116,53 @@ log "SD card ejected - triggering Immich scan in background..."
 if [ -f "$SCRIPT_DIR/.immich_api_key" ]; then
     if [ -f "$SCRIPT_DIR/venv/bin/python3" ]; then
         (
-            # Run scan, wait a bit for it to complete, then stack
+            # Run scan, then wait for Immich to finish processing before stacking
             "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/trigger_immich_scan.py" >> "$LOG_FILE" 2>&1 || \
                 log "Warning: Immich scan trigger failed"
-            
-            # Wait for scan to process new files before stacking
-            sleep 30
-            
+
+            # Poll until ALL Immich jobs are idle (max 30 min for large dumps on slow hardware)
+            API_KEY=$(cat "$SCRIPT_DIR/.immich_api_key" 2>/dev/null)
+            IMMICH_URL=$(cat "$SCRIPT_DIR/.immich_url" 2>/dev/null || echo "http://localhost:2283")
+            log "Waiting for Immich to finish processing new files..."
+            WAITED=0
+            MAX_WAIT=1800  # 30 minutes
+            IDLE_CONFIRMATIONS=0  # require 3 consecutive idle checks before stacking
+            while [ $WAITED -lt $MAX_WAIT ]; do
+                ACTIVE=$(curl -sf -H "x-api-key: $API_KEY" \
+                    "$IMMICH_URL/api/jobs" 2>/dev/null | \
+                    python3 -c "
+import sys, json
+try:
+    jobs = json.load(sys.stdin)
+    total = sum(
+        j.get('jobCounts', {}).get('active', 0) +
+        j.get('jobCounts', {}).get('waiting', 0) +
+        j.get('jobCounts', {}).get('paused', 0)
+        for j in jobs.values()
+    )
+    print('yes' if total > 0 else 'no')
+except:
+    print('no')
+" 2>/dev/null || echo "no")
+                if [ "$ACTIVE" = "no" ]; then
+                    IDLE_CONFIRMATIONS=$((IDLE_CONFIRMATIONS + 1))
+                    if [ $IDLE_CONFIRMATIONS -ge 3 ]; then
+                        log "Immich processing complete (idle for 30s), starting auto-stack..."
+                        break
+                    fi
+                else
+                    IDLE_CONFIRMATIONS=0
+                fi
+                sleep 10
+                WAITED=$((WAITED + 10))
+            done
+            if [ $WAITED -ge $MAX_WAIT ]; then
+                log "Warning: Timed out waiting for Immich, running auto-stack anyway"
+            fi
+
             "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/immich_auto_stack.py" >> "$LOG_FILE" 2>&1 || \
                 log "Warning: Auto-stack failed"
-            
+
             log "Immich scan and stacking complete"
         ) &
         log "Immich processing started in background (PID: $!)"
