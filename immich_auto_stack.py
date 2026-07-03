@@ -183,18 +183,12 @@ def stack_assets(base_url, api_key, parent_id, child_ids, dry_run=False):
     }
     
     result = api_request(url, api_key, method='POST', data=payload)
-    
+
     if result is None:
-        # Fallback to old API: PUT /api/assets with stackParentId
-        logger.info("  Trying legacy API...")
-        url = f"{base_url}/api/assets"
-        payload = {
-            "ids": child_ids,
-            "stackParentId": parent_id
-        }
-        result = api_request(url, api_key, method='PUT', data=payload)
-    
-    return result is not None or True
+        logger.warning("  Failed to stack assets via POST /api/stacks")
+        return False
+
+    return True
 
 
 def main():

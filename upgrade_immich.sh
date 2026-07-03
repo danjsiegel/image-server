@@ -74,7 +74,7 @@ DB_NAME=$(grep "^DB_DATABASE_NAME=" .env | cut -d'=' -f2)
 DB_PASS=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2)
 
 if command -v pg_dump &> /dev/null; then
-    PGPASSWORD="$DB_PASS" pg_dump -h localhost -U "$DB_USER" -d "$DB_NAME" > "$DB_BACKUP_FILE" 2>/dev/null && \
+    PGPASSWORD="$DB_PASS" pg_dump -h localhost -U "$DB_USER" -d "$DB_NAME" -w > "$DB_BACKUP_FILE" 2>/dev/null && \
         log "✓ Database backed up to $DB_BACKUP_FILE" || \
         warn "Database backup failed (non-critical, continuing...)"
 else
@@ -99,6 +99,40 @@ echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     log "Upgrade cancelled by user"
     exit 0
+fi
+
+# Step 3b: v3 migration pre-flight checks
+log "Step 3b: Running v3 migration pre-flight checks..."
+
+# Check for removed env vars
+V3_WARNINGS=0
+if grep -q "^DB_VECTOR_EXTENSION=pgvecto.rs" .env 2>/dev/null; then
+    error "DB_VECTOR_EXTENSION=pgvecto.rs is not supported in v3. Migrate to VectorChord first:
+  https://docs.immich.app/install/upgrading#migrating-to-vectorchord"
+fi
+if grep -q "^IMMICH_MACHINE_LEARNING_PING_TIMEOUT=" .env 2>/dev/null; then
+    warn "IMMICH_MACHINE_LEARNING_PING_TIMEOUT is removed in v3. Use Admin UI: machineLearning.availabilityChecks.timeout"
+    V3_WARNINGS=$((V3_WARNINGS + 1))
+fi
+if grep -q "^MACHINE_LEARNING_PRELOAD__CLIP=" .env 2>/dev/null; then
+    warn "MACHINE_LEARNING_PRELOAD__CLIP is removed in v3. Use MACHINE_LEARNING_PRELOAD__CLIP__TEXTUAL and __VISUAL instead"
+    V3_WARNINGS=$((V3_WARNINGS + 1))
+fi
+if grep -q "^MACHINE_LEARNING_PRELOAD__FACIAL_RECOGNITION=" .env 2>/dev/null; then
+    warn "MACHINE_LEARNING_PRELOAD__FACIAL_RECOGNITION is removed in v3. Use __DETECTION and __RECOGNITION instead"
+    V3_WARNINGS=$((V3_WARNINGS + 1))
+fi
+
+if [ $V3_WARNINGS -gt 0 ]; then
+    echo ""
+    read -p "${V3_WARNINGS} v3 compatibility warning(s) above. Continue anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log "Upgrade cancelled by user"
+        exit 0
+    fi
+else
+    log "✓ v3 pre-flight checks passed"
 fi
 
 # Step 4: Update version in .env
