@@ -42,6 +42,7 @@ scp trigger_immich_scan.py "$REMOTE_HOST:$REMOTE_DIR/"
 scp immich_auto_stack.py "$REMOTE_HOST:$REMOTE_DIR/"
 scp upgrade_immich.sh "$REMOTE_HOST:$REMOTE_DIR/"
 scp setup_immich_stacking_cron.sh "$REMOTE_HOST:$REMOTE_DIR/"
+scp check_immich_duplicates.py "$REMOTE_HOST:$REMOTE_DIR/"
 
 # Make scripts executable
 ssh "$REMOTE_HOST" "chmod +x $REMOTE_DIR/*.sh $REMOTE_DIR/*.py 2>/dev/null || true"
